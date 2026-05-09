@@ -17,7 +17,7 @@ def _synthetic_ticks(n=300, base=100.0, drift=0.01, amp=0.0):
 
 
 def test_engine_buy_then_hold_gain():
-    """Strategy buys once on tick 5, holds; price drifts up → positive PnL."""
+    """Strategy buys once on tick 5, drifts up; force-close yields realized PnL."""
     def strat(t: Tick, state: dict):
         if t.ts == 5 and state.get("done") is None:
             state["done"] = True
@@ -25,11 +25,12 @@ def test_engine_buy_then_hold_gain():
         return None
     ticks = _synthetic_ticks(n=100, base=100.0, drift=1.0)
     res = run(strat, ticks, symbol="SYN", strategy_name="hold", fee_rate=0.0)
-    # bought 1 unit at price 105 (tick 5), held to price 199 → unrealized = 94
     assert res.n_ticks == 100
-    assert res.final_pnl > 0
-    assert res.final_position == 1.0
-    assert len(res.trades) == 1
+    assert res.final_pnl > 0   # bought at ~105, force-closed at ~199
+    # The engine force-closes at the last tick, so we expect 2 trades
+    # (the buy + the auto-close sell). Position is back to flat.
+    assert res.final_position == 0.0
+    assert len(res.trades) == 2
 
 
 def test_engine_fee_reduces_pnl():
@@ -52,7 +53,8 @@ def test_metrics_run():
     ticks = _synthetic_ticks(n=100, drift=0.5)
     res = run(strat, ticks, fee_rate=0.0)
     m = all_metrics(res)
-    for k in ("sharpe", "sortino", "max_drawdown", "win_rate", "profit_factor"):
+    for k in ("sharpe", "sortino", "max_drawdown", "win_rate", "profit_factor",
+              "fees_paid", "initial_capital", "final_pnl_pct"):
         assert k in m
 
 
@@ -66,12 +68,13 @@ def test_ma_cross_runs():
 
 
 def test_breakout_triggers_on_jump():
-    """Force a clear breakout and verify position taken."""
+    """Force a clear breakout and verify position WAS taken (engine
+    auto-closes at end so final_position is 0; check max_position instead)."""
     base = [Tick(ts=float(i), price=100.0, symbol="X") for i in range(200)]
     jump = [Tick(ts=float(200 + i), price=110.0, symbol="X") for i in range(20)]
     res = run(strategies.REGISTRY["breakout"], base + jump,
               symbol="X", strategy_name="breakout", fee_rate=0.0)
-    assert res.final_position > 0  # went long the breakout
+    assert res.max_position > 0  # took a position at some point
 
 
 def test_ascii_curve_renders():
