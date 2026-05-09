@@ -398,12 +398,13 @@ async def main_async():
     await kb_sql.init()
     await ddb.init()
     await chroma.init()
-    from .kb import preferences as prefs_kb, questions as q_kb, capability_gaps as cap_kb, knowledge_gaps as kg_kb, curriculum as curr_kb
+    from .kb import preferences as prefs_kb, questions as q_kb, capability_gaps as cap_kb, knowledge_gaps as kg_kb, curriculum as curr_kb, strategies as strat_kb
     await q_kb.init()
     await prefs_kb.init()
     await cap_kb.init()
     await kg_kb.init()
     await curr_kb.init()
+    await strat_kb.init()
 
     # feeds (trade)
     runtime.FEEDS[:] = [cls() for cls in FEED_CLASSES]

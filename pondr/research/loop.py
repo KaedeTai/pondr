@@ -11,6 +11,7 @@ from .executor import execute
 from .synthesizer import synthesize
 from .reflector import reflect
 from .triangulation_ask import triangulate as _triangulate_finding
+from . import strategy_synth
 
 
 import os
@@ -50,6 +51,19 @@ async def _run_task(task):
             summary = f"triangulate error: {e}"
         await kb_sql.complete_task(task["id"], result=summary)
         event("task_done", id=task["id"], triangulated=True)
+        await MUX.send({"type": "finding", "msg": summary,
+                        "topic": task["topic"]})
+        return
+
+    if (task.get("topic") or "").startswith(strategy_synth.STRATEGY_TASK_PREFIX):
+        try:
+            out = await strategy_synth.run(task)
+            summary = out.get("summary") or "strategy synthesis completed"
+        except Exception as e:
+            logger.exception(f"strategy_synth failed: {e}")
+            summary = f"strategy_synth error: {e}"
+        await kb_sql.complete_task(task["id"], result=summary)
+        event("task_done", id=task["id"], strategy_synth=True)
         await MUX.send({"type": "finding", "msg": summary,
                         "topic": task["topic"]})
         return

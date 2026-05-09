@@ -1,7 +1,8 @@
 """Tool registry — dispatch table + OpenAI-format schema list."""
 from __future__ import annotations
 from . import (web_search, web_fetch, browser, rest, rag, sql, notes, market,
-               ask, prefs, capability, backtest, arb, orderbook, curriculum)
+               ask, prefs, capability, backtest, arb, orderbook, curriculum,
+               strategy)
 from ..server.channels import ask_user as _ask_alias
 from ..utils.log import logger
 
@@ -33,6 +34,10 @@ DISPATCH = {
     "summarize_orderbook": orderbook.summarize_orderbook,
     "curriculum_view": curriculum.curriculum_view,
     "curriculum_deep_dive": curriculum.curriculum_deep_dive,
+    "design_strategy": strategy.design_strategy,
+    "iterate_strategy": strategy.iterate_strategy,
+    "run_strategy": strategy.run_strategy,
+    "compare_strategies": strategy.compare_strategies,
     "interrupt_check": None,  # filled below
 }
 
@@ -63,6 +68,10 @@ ALL_SCHEMAS = [
     orderbook.SUMMARIZE_SCHEMA,
     curriculum.VIEW_SCHEMA,
     curriculum.DEEP_DIVE_SCHEMA,
+    strategy.DESIGN_SCHEMA,
+    strategy.ITERATE_SCHEMA,
+    strategy.RUN_SCHEMA,
+    strategy.COMPARE_SCHEMA,
 ]
 
 

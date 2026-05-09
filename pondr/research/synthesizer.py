@@ -117,6 +117,14 @@ async def synthesize(parent_topic: str, results: list[dict]) -> dict:
         except Exception as e:
             logger.warning(f"triangulate enqueue: {e}")
 
+    # Auto-enqueue strategy synthesis when finding looks like a hypothesis
+    try:
+        from . import strategy_synth
+        await strategy_synth.maybe_enqueue_synthesis(
+            parent_topic, finding, note_id=note_id)
+    except Exception as e:
+        logger.debug(f"strategy_synth enqueue: {e}")
+
     # Conflicts → ask user (async, non-blocking)
     if conflicts:
         try:

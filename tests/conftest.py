@@ -19,6 +19,7 @@ from pondr.kb import (
     capability_gaps as cap_kb,
     knowledge_gaps as kg_kb,
     curriculum as curr_kb,
+    strategies as strat_kb,
 )
 
 
@@ -40,6 +41,7 @@ def _kb_init():
         loop.run_until_complete(curr_kb.init())
     except Exception:
         pass
+    loop.run_until_complete(strat_kb.init())
     yield
     # tear down: remove tmp dir after session ends
     shutil.rmtree(_TEST_DATA_DIR, ignore_errors=True)

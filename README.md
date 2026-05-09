@@ -168,11 +168,50 @@ Three live quant pipelines feed both the dashboard and the LLM tools:
 A tick-replay engine consumes DuckDB ticks and runs strategy callables that
 return `Signal('buy'|'sell'|'flat', size, reason)`. Built-in strategies:
 `ma_cross`, `mean_reversion` (z-score), `breakout` — each ~80 lines, easy to
-fork. Metrics: Sharpe, Sortino, max drawdown, win rate, profit factor, plus
-an ASCII equity curve. Results land in SQLite `backtests` (with confidence,
-auto-set to 0.3 when `n_ticks < 1000`). LLM tool: `run_backtest(strategy_name,
-symbol, start_ts?, end_ts?)`. Dashboard **📈 Backtests** card lists all runs
-with sparkline curves and metrics.
+fork. Metrics: Sharpe (annualised, hourly-resampled — see [Strategy synthesis](#strategy-synthesis-llm-designed-on_tick-code)),
+Sortino, max drawdown (peak-to-trough on equity that starts at
+`initial_capital=10,000` USDT), win rate, profit factor, fees paid (5 bp/side
+default), plus an ASCII equity curve. Results land in SQLite `backtests`
+(with confidence, auto-set to 0.3 when `n_ticks < 1000`). LLM tool:
+`run_backtest(strategy_name, symbol, start_ts?, end_ts?)`. Dashboard
+**📈 Backtests** card lists all runs with sparkline curves and metrics.
+
+Position sizing: legacy `Signal('buy', size=1.0)` is interpreted as
+*1 × risk_pct fraction of equity worth at current price* (so size=1.0 +
+risk_pct=1% + equity=10k = $100 worth at the live mark). Dict-style
+`on_tick` actions (see strategy synthesis) take `qty` verbatim in base
+units instead. Backtests force-close any open position at the last tick
+so realised = final and there's no dangling unrealised component.
+
+### Strategy synthesis (LLM-designed `on_tick` code)
+
+Beyond the three hand-written templates, pondr can ask its LLM to *invent*
+strategies from research findings. Flow:
+
+1. **Hypothesis** — either you ask via chat ("design a strategy that fades
+   1-min volume spikes on BTCUSDT") or the synthesizer auto-detects a
+   hypothesis-shaped finding (`when X then Y`, `預測`, `信號` ...).
+2. **`design_strategy(name, hypothesis)`** — the LLM writes a Python
+   `on_tick(state, tick) -> action` body. Output is AST-validated against
+   a sandbox (`pondr/quant/strategies/sandbox.py`): no `import`, no `open`/
+   `eval`/`exec`/`getattr`, no dunder attribute access, hard 100-line cap.
+   Builtins are whitelisted; `math`, `statistics`, and a limited `np`
+   namespace (mean/std/diff/clip/sign/...) are pre-injected.
+3. **`run_strategy(strategy_id, symbol)`** — pulls ticks from DuckDB,
+   runs the sandboxed code with a per-tick cooperative-yield timeout,
+   force-closes at end, persists a backtest row linked to `strategy_id`.
+4. **`iterate_strategy(parent_id, modification_request)`** — child variant
+   with a single tweak; saved with `lineage_parent_id` so the dashboard
+   can render the family tree.
+5. **`compare_strategies([ids])`** — side-by-side metrics + ASCII curves
+   from each one's most recent backtest.
+
+The orchestrator at `pondr/research/strategy_synth.py` strings these
+together into design → run → suggest-mod → iterate → finding, and the
+research loop dispatches `[design_strategy]` tasks to it. Dashboard
+**🧪 Strategy lab** card lists strategies with their last metrics, an
+inline design form, per-row `re-run` / `iterate` / `view code+lineage`
+buttons.
 
 **Cross-exchange arb scanner** (`pondr/quant/arb/`)
 A 1 Hz polling loop compares the latest tick on Binance and Coinbase for each

@@ -304,6 +304,79 @@ window.__PONDR__ = {
     </div>
   </section>
 
+  <!-- Strategy Lab — LLM-designed strategies + lineage -->
+  <section class="card full">
+    <h2>🧪 Strategy lab
+      <span class="muted" style="font-weight:normal;font-size:11px;">
+        ({{ (state.strategies||[]).length }})
+      </span>
+    </h2>
+    <div class="body">
+      <!-- inline design form -->
+      <details style="margin-bottom:8px;">
+        <summary style="cursor:pointer;color:var(--accent);">+ design new strategy</summary>
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          <input v-model="strategyDraft.name" placeholder="name (slug)" style="width:200px;" />
+          <input v-model="strategyDraft.hypothesis" placeholder="hypothesis (1 line)" />
+          <button @click="designStrategy()" :disabled="strategyDraft.busy">
+            {{ strategyDraft.busy ? '...' : 'design' }}
+          </button>
+        </div>
+        <div v-if="strategyDraft.last" class="muted" style="margin-top:4px;font-size:11px;">
+          {{ strategyDraft.last }}
+        </div>
+      </details>
+      <details v-for="s in (state.strategies||[])" :key="s.id"
+               style="margin-bottom:6px;border-bottom:1px dotted var(--border);padding-bottom:6px;">
+        <summary style="cursor:pointer;">
+          <span class="tag">#{{ s.id }}</span>
+          <b>{{ s.name }}</b>
+          <span v-if="s.lineage_parent_id" class="tag">↳ from #{{ s.lineage_parent_id }}</span>
+          <span v-if="s.status && s.status !== 'ok'"
+                class="tag bad">{{ s.status }}</span>
+          <span class="muted" style="font-size:11px;">
+            <template v-if="s.last_backtest">
+              — sharpe {{ ((s.last_backtest.sharpe)||0).toFixed(2) }} ·
+              DD {{ (((s.last_backtest.max_drawdown)||0)*100).toFixed(1) }}% ·
+              PnL {{ ((s.last_backtest.final_pnl)||0).toFixed(2) }} ·
+              {{ s.last_backtest.n_ticks }} ticks
+            </template>
+            <template v-else> — no backtest yet</template>
+            · by {{ s.created_by }}
+          </span>
+        </summary>
+        <div style="padding:6px 0;">
+          <div class="muted" style="font-size:11px;margin-bottom:4px;">
+            <b>hypothesis:</b> {{ s.hypothesis }}
+          </div>
+          <pre v-if="s.last_backtest && s.last_backtest.ascii_curve"
+               style="background:var(--bg);padding:6px;font-size:10px;line-height:1.0;border-radius:3px;">{{ s.last_backtest.ascii_curve }}</pre>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+            <button @click="runStrategy(s.id)">🔄 re-run</button>
+            <input v-model="strategyMods[s.id]"
+                   placeholder="modification (e.g. 'add 200-tick z-score gate')"
+                   style="width:300px;" />
+            <button @click="iterateStrategy(s.id)">💬 iterate</button>
+            <button @click="loadStrategyDetail(s.id)">📜 code+lineage</button>
+          </div>
+          <div v-if="strategyDetails[s.id]" style="margin-top:6px;padding:6px;background:var(--bg);border-radius:3px;">
+            <div class="muted" style="font-size:11px;margin-bottom:4px;">code:</div>
+            <pre style="font-size:10px;max-height:240px;overflow:auto;">{{ strategyDetails[s.id].strategy.code_python }}</pre>
+            <div v-if="strategyDetails[s.id].lineage_tree" class="muted"
+                 style="font-size:11px;margin-top:6px;">
+              lineage root: #{{ strategyDetails[s.id].lineage_root_id }} ·
+              {{ countLineageNodes(strategyDetails[s.id].lineage_tree) }} total nodes
+            </div>
+          </div>
+        </div>
+      </details>
+      <div v-if="!(state.strategies||[]).length" class="muted">
+        no strategies yet — design one above, or pondr will auto-create them
+        from research findings
+      </div>
+    </div>
+  </section>
+
   <!-- Backtests -->
   <section class="card full">
     <h2>📈 Backtests
@@ -713,6 +786,10 @@ window.__PONDR__ = {
         chatWsTimer: null,
         currModal: null,
         curriculumRegenerating: false,
+        // Strategy lab state
+        strategyDraft: { name: '', hypothesis: '', busy: false, last: '' },
+        strategyMods: {},        // { [strategy_id]: 'modification text' }
+        strategyDetails: {},     // { [strategy_id]: detail blob from API }
         // Initial topic injected from server (window.__PONDR__)
         initialTopic: (window.__PONDR__||{}).initialTopic || '',
         wsPort: (window.__PONDR__||{}).wsPort || 8765,
@@ -845,6 +922,80 @@ window.__PONDR__ = {
           if (j.error) alert('regenerate failed: '+j.error);
         } catch(e) { alert('regenerate error: '+e); }
         this.curriculumRegenerating = false;
+      },
+      // ---- Strategy lab ----
+      async designStrategy() {
+        const hyp = (this.strategyDraft.hypothesis||'').trim();
+        if (!hyp) return;
+        this.strategyDraft.busy = true;
+        this.strategyDraft.last = '';
+        try {
+          const r = await fetch('/api/strategies/design', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({
+              name: (this.strategyDraft.name||'').trim(),
+              hypothesis: hyp,
+            }),
+          });
+          const j = await r.json();
+          if (j.error) {
+            this.strategyDraft.last = 'error: ' + j.error;
+          } else {
+            this.strategyDraft.last = `created strategy #${j.strategy_id} (${j.status})`;
+            this.strategyDraft.name = '';
+            this.strategyDraft.hypothesis = '';
+            await this.fetchState();
+          }
+        } catch(e) {
+          this.strategyDraft.last = 'network: ' + e;
+        }
+        this.strategyDraft.busy = false;
+      },
+      async runStrategy(sid) {
+        try {
+          const r = await fetch('/api/strategies/'+sid+'/run', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:'{}',
+          });
+          const j = await r.json();
+          if (j.error) alert('run failed: ' + j.error);
+          else await this.fetchState();
+        } catch(e) { alert('run error: '+e); }
+      },
+      async iterateStrategy(sid) {
+        const mod = (this.strategyMods[sid]||'').trim();
+        if (!mod) { alert('describe a modification first'); return; }
+        try {
+          const r = await fetch('/api/strategies/'+sid+'/iterate', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({modification: mod}),
+          });
+          const j = await r.json();
+          if (j.error) {
+            alert('iterate failed: ' + j.error);
+          } else {
+            this.strategyMods[sid] = '';
+            await this.fetchState();
+          }
+        } catch(e) { alert('iterate error: '+e); }
+      },
+      async loadStrategyDetail(sid) {
+        if (this.strategyDetails[sid]) {
+          // toggle off
+          delete this.strategyDetails[sid];
+          return;
+        }
+        try {
+          const r = await fetch('/api/strategies/'+sid);
+          if (!r.ok) { alert('strategy not found'); return; }
+          this.strategyDetails[sid] = await r.json();
+        } catch(e) { alert('load error: '+e); }
+      },
+      countLineageNodes(node) {
+        if (!node) return 0;
+        let n = 1;
+        for (const c of (node.children||[])) n += this.countLineageNodes(c);
+        return n;
       },
       async openCurrModal(nodeId) {
         try {

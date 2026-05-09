@@ -12,7 +12,7 @@ from .. import config
 from ..kb import (sqlite as kb_sql, duckdb as ddb, chroma, questions as q_kb,
                   preferences as prefs_kb, capability_gaps as cap_kb,
                   knowledge_gaps as kg_kb, curriculum as curr_kb,
-                  llm_stats as llm_stats_kb)
+                  llm_stats as llm_stats_kb, strategies as strat_kb)
 from ..server.channels import MUX, list_questions, resolve_question
 from ..server import event_bus
 from ..research import CURRENT
@@ -87,6 +87,7 @@ async def _state() -> dict:
         "capability_gaps": await cap_kb.list_open(),
         "recent_findings": await kb_sql.find_notes_by_topic("finding/", limit=20),
         "recent_backtests": await _recent_backtests(10),
+        "strategies": await _strategies_summary(20),
         "recent_arbs": await _recent_arbs(10),
         "recent_imbalances": await _recent_imbalances(10),
 
@@ -337,6 +338,94 @@ async def _recent_imbalances(limit: int = 10) -> list[dict]:
         return rows
     except Exception:
         return []
+
+
+async def _strategies_summary(limit: int = 20) -> list[dict]:
+    """Compact list for the dashboard's Strategy Lab card.
+
+    Each row carries the strategy meta + the *most recent* backtest's metrics
+    so the card can show 'sharpe / mdd / pnl' without a second round trip.
+    """
+    rows = await strat_kb.list_all(limit=limit)
+    out = []
+    for s in rows:
+        bt = await strat_kb.last_backtest(s["id"])
+        out.append({
+            "id": s["id"], "name": s["name"],
+            "hypothesis": (s.get("hypothesis") or "")[:200],
+            "description": s.get("description") or "",
+            "lineage_parent_id": s.get("lineage_parent_id"),
+            "created_by": s.get("created_by"),
+            "created_at": s.get("created_at"),
+            "status": s.get("status"),
+            "last_backtest": ({
+                "id": bt["id"],
+                "symbol": bt.get("symbol"),
+                "n_ticks": bt.get("n_ticks"),
+                "sharpe": (bt.get("metrics") or {}).get("sharpe"),
+                "max_drawdown": (bt.get("metrics") or {}).get("max_drawdown"),
+                "final_pnl": (bt.get("metrics") or {}).get("final_pnl"),
+                "final_pnl_pct": (bt.get("metrics") or {}).get("final_pnl_pct"),
+                "win_rate": (bt.get("metrics") or {}).get("win_rate"),
+                "ascii_curve": bt.get("ascii_curve"),
+                "created_at": bt.get("created_at"),
+            } if bt else None),
+        })
+    return out
+
+
+@app.get("/api/strategies")
+async def api_strategies():
+    return {"strategies": await _strategies_summary(50)}
+
+
+@app.get("/api/strategies/{strategy_id}")
+async def api_strategy_detail(strategy_id: int):
+    s = await strat_kb.get(int(strategy_id))
+    if s is None:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    root_id = await strat_kb.find_root(int(strategy_id))
+    tree = await strat_kb.lineage_tree(root_id)
+    last_bt = await strat_kb.last_backtest(int(strategy_id))
+    all_bts = await strat_kb.all_backtests(int(strategy_id), limit=10)
+    return {
+        "strategy": s,
+        "lineage_root_id": root_id,
+        "lineage_tree": tree,
+        "last_backtest": last_bt,
+        "backtests": all_bts,
+    }
+
+
+@app.post("/api/strategies/{strategy_id}/run")
+async def api_strategy_run(strategy_id: int, payload: dict | None = None):
+    payload = payload or {}
+    from ..tools.strategy import run_strategy
+    return await run_strategy(
+        int(strategy_id),
+        symbol=(payload.get("symbol") or "BTCUSDT"),
+        max_ticks=int(payload.get("max_ticks") or 20_000),
+    )
+
+
+@app.post("/api/strategies/{strategy_id}/iterate")
+async def api_strategy_iterate(strategy_id: int, payload: dict):
+    mod = (payload or {}).get("modification") or ""
+    if not mod.strip():
+        return {"error": "missing modification"}
+    from ..tools.strategy import iterate_strategy
+    return await iterate_strategy(int(strategy_id), mod.strip())
+
+
+@app.post("/api/strategies/design")
+async def api_strategy_design(payload: dict):
+    name = ((payload or {}).get("name") or "").strip()
+    hyp = ((payload or {}).get("hypothesis") or "").strip()
+    if not hyp:
+        return {"error": "missing hypothesis"}
+    from ..tools.strategy import design_strategy
+    return await design_strategy(name=name or f"manual_{int(time.time())}",
+                                 hypothesis=hyp)
 
 
 @app.get("/api/backtests")
