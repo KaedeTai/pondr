@@ -1,0 +1,24 @@
+# User preferences
+
+The bot reads this on startup and writes it after every change. The
+SQLite table `user_preferences` is the source of truth — manual edits
+here are reloaded on the next bot restart.
+
+Add long-lived instructions through chat ("請以後跟我說繁體中文",
+"always cite sources before claims") and they'll show up here. Avoid
+storing secrets / passwords / API keys — the bot's sensitivity filter
+will reject them anyway.
+
+## Communication
+
+- language: 繁體中文 (example — added 2026-05-09 via ws)
+- tone: 簡潔 (example)
+
+## Workflow
+
+- never auto-execute irreversible actions, always ask first (example)
+- prefer Porkbun over Cloudflare for domain pricing (example)
+
+## Notification
+
+- only push major findings, debounce 30 min (example)

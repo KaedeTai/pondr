@@ -1,0 +1,1094 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0f1115" />
+<title>pondr dashboard</title>
+<style>
+:root { --bg:#0f1115; --panel:#171a21; --panel2:#1d2128; --border:#262b34;
+        --fg:#cfd6e0; --muted:#7c8492; --accent:#5fa8ff; --warn:#f7b955;
+        --bad:#ef5b5b; --ok:#4caf6e; --mono:'SF Mono', Menlo, Consolas, monospace; }
+* { box-sizing:border-box; }
+html,body { background:var(--bg); color:var(--fg); margin:0; font-family:system-ui,-apple-system,sans-serif; font-size:13px; }
+header { background:var(--panel); border-bottom:1px solid var(--border); padding:8px 14px; display:flex; gap:18px; align-items:center; }
+header b { color:var(--accent); }
+.topbar-item { color:var(--muted); }
+.topbar-item span { color:var(--fg); margin-left:4px; }
+main { display:grid; grid-template-columns: 1fr 1fr; gap:10px; padding:10px; }
+.full { grid-column: 1 / -1; }
+.card { background:var(--panel); border:1px solid var(--border); border-radius:6px; }
+.card h2 { font-size:12px; text-transform:uppercase; letter-spacing:0.07em; margin:0; padding:8px 12px; color:var(--muted); border-bottom:1px solid var(--border); }
+.card .body { padding:8px 12px; max-height:340px; overflow:auto; }
+.row { display:flex; gap:6px; padding:3px 0; border-bottom:1px dotted var(--border); }
+.row:last-child { border-bottom:none; }
+.tag { display:inline-block; padding:1px 6px; border-radius:3px; font-size:10px; background:var(--panel2); color:var(--muted); margin-right:4px; }
+.ok { color:var(--ok); } .bad { color:var(--bad); } .warn { color:var(--warn); }
+.mono { font-family:var(--mono); font-size:11px; }
+button { background:var(--panel2); color:var(--fg); border:1px solid var(--border); padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px; }
+button:hover { background:var(--border); }
+input, textarea, select { background:var(--panel2); color:var(--fg); border:1px solid var(--border); padding:5px 8px; border-radius:4px; font-size:12px; width:100%; }
+.q-card { background:#3a2a18; border:1px solid var(--warn); padding:10px 12px; border-radius:6px; margin-bottom:6px; }
+.q-card .q { font-weight:600; }
+.llm-row { padding:4px 0; border-bottom:1px dotted var(--border); }
+.llm-row summary { cursor:pointer; font-family:var(--mono); font-size:11px; color:var(--muted); }
+.llm-row summary b { color:var(--fg); }
+.llm-row pre { background:var(--bg); padding:6px; max-height:240px; overflow:auto; white-space:pre-wrap; font-size:10px; margin:4px 0; border-radius:3px; }
+.muted { color:var(--muted); }
+.chat-line { padding:3px 0; border-bottom:1px dotted var(--border); font-size:12px; }
+.chat-line .who { color:var(--accent); margin-right:6px; font-weight:600; }
+
+/* Curriculum */
+.curriculum-tree details { margin-bottom:6px; }
+.curriculum-tree summary { cursor:pointer; padding:3px 0; font-weight:600; }
+.curriculum-tree summary:hover { color:var(--accent); }
+.curriculum-tree ul { list-style:none; padding-left:18px; margin:4px 0; }
+.curriculum-tree li { padding:3px 0; display:grid; grid-template-columns:28px 1fr 90px 100px 60px; gap:8px; align-items:center; border-bottom:1px dotted var(--border); }
+.curriculum-tree li.solid  > .icon { color:#4caf6e; }
+.curriculum-tree li.medium > .icon { color:#f7b955; }
+.curriculum-tree li.open   > .icon { color:#ef5b5b; }
+.curriculum-tree .meta { font-size:11px; color:var(--muted); font-family:var(--mono); }
+.curriculum-tree .mbar { width:80px; height:6px; background:var(--panel2); border-radius:3px; overflow:hidden; }
+.curriculum-tree .mbar > div { height:100%; }
+.curriculum-tree .deep-dive-btn,
+.curriculum-tree .ask-btn { padding:2px 6px; font-size:11px; }
+.modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.6); display:none; align-items:flex-start; justify-content:center; z-index:1000; padding:40px 20px; overflow:auto; }
+.modal-backdrop.open { display:flex; }
+.modal { background:var(--panel); border:1px solid var(--border); border-radius:8px; max-width:780px; width:100%; padding:18px 22px; }
+.modal h3 { margin:0 0 8px 0; }
+.modal .close-btn { float:right; background:transparent; border:none; color:var(--muted); font-size:18px; cursor:pointer; }
+.modal .section { margin-top:14px; padding-top:10px; border-top:1px solid var(--border); }
+.modal .section h4 { font-size:11px; text-transform:uppercase; letter-spacing:0.07em; color:var(--muted); margin:0 0 6px 0; }
+
+/* Conn indicator */
+.sse-on { color: var(--ok); }
+.sse-off { color: var(--bad); }
+.sse-poll { color: var(--warn); }
+
+/* === Responsive: mobile portrait (≤640px) === */
+@media (max-width: 640px) {
+    html, body { font-size:14px; }
+    header { flex-wrap:wrap; padding:6px 10px; gap:8px 12px; row-gap:4px; }
+    header b { font-size:16px; }
+    .topbar-item { font-size:11px; }
+    .topbar-item.right { width:100%; margin-left:0 !important; padding-top:2px; border-top:1px dotted var(--border); }
+    main { grid-template-columns: 1fr; gap:8px; padding:8px; }
+    .card .body { max-height:280px; padding:6px 10px; }
+    .card h2 { font-size:11px; padding:6px 10px; }
+    .curriculum-tree li { grid-template-columns:24px 1fr 60px !important; row-gap:3px; }
+    .curriculum-tree li .meta { grid-column:1/-1; padding-left:24px; font-size:10px; }
+    .curriculum-tree li .mbar { width:60px !important; }
+    .curriculum-tree li .deep-dive-btn,
+    .curriculum-tree li .ask-btn { font-size:10px; padding:3px 6px; }
+    .modal-backdrop { padding:0; }
+    .modal { max-width:none; height:100vh; border-radius:0; padding:14px 16px; overflow:auto; }
+    button { padding:8px 12px; font-size:13px; min-height:36px; }
+    input, textarea, select { font-size:14px; padding:8px 10px; min-height:36px; }
+    .grid-mobile-stack { grid-template-columns: 1fr !important; }
+    .grid-mobile-2 { grid-template-columns: 1fr 1fr !important; }
+    .llm-row pre { font-size:9px; max-height:200px; }
+    .llm-row summary { font-size:10px; }
+    .chat-line { font-size:13px; }
+}
+@media (max-width: 960px) and (min-width: 641px) {
+    main { grid-template-columns: 1fr; gap:10px; padding:10px; }
+    .card .body { max-height:320px; }
+}
+</style>
+</head>
+<body>
+
+<script>
+// Server-injected config (Jinja2 — happens before Vue compiles templates).
+window.__PONDR__ = {
+  initialTopic: {{ initial_topic | tojson }},
+  wsPort: {{ ws_port | tojson }},
+  dashPort: {{ dash_port | tojson }},
+};
+</script>
+
+{% raw %}
+<div id="app">
+<header>
+  <b>pondr</b>
+  <span class="topbar-item">status<span :class="connStateClass">{{ connStateIcon }}</span></span>
+  <span class="topbar-item">uptime<span>{{ fmtAgo(state.uptime_s) }}</span></span>
+  <span class="topbar-item">task<span>{{ (state.current_task && state.current_task.topic || '—').slice(0,60) }}</span></span>
+  <span class="topbar-item">LLM tokens<span>{{ totalTokens }}</span></span>
+  <span class="topbar-item">events<span>{{ (state.events||[]).length }}</span></span>
+  <span class="topbar-item right" style="margin-left:auto;color:var(--muted);">topic: <span style="color:var(--fg)">{{ initialTopic }}</span></span>
+  <!-- (initialTopic is bound to window.__PONDR__.initialTopic in data()) -->
+</header>
+
+<main>
+  <!-- Bot is asking -->
+  <section class="card full" v-if="(state.questions||[]).length">
+    <h2>⚠️ Bot is asking</h2>
+    <div class="body">
+      <div v-for="q in (state.questions||[])" :key="q.qid || q.id" class="q-card">
+        <div class="muted" style="font-size:11px;margin-bottom:4px;">
+          qid {{ (q.qid||q.id||'').slice(0,8) }} ·
+          {{ fmtAgo(q.age_seconds||0) }} ago
+          <span v-if="q.asked_by" class="tag">{{ q.asked_by }}</span>
+        </div>
+        <div class="q">{{ q.question }}</div>
+        <!-- Options buttons -->
+        <div v-if="Array.isArray(q.options) && q.options.length"
+             style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button v-for="(o,i) in q.options" :key="i"
+                  @click="submitAnswer(q.qid||q.id, String(o))">
+            {{ i+1 }}. {{ o }}
+          </button>
+        </div>
+        <div v-if="Array.isArray(q.options) && q.options.length"
+             class="muted" style="font-size:11px;margin-top:4px;">
+          or type a custom reply:
+          <input v-model="answerDrafts[q.qid||q.id]"
+                 @keydown.enter="submitAnswer(q.qid||q.id, answerDrafts[q.qid||q.id]||'')"
+                 placeholder="custom reply..." />
+          <button @click="submitAnswer(q.qid||q.id, answerDrafts[q.qid||q.id]||'')">send</button>
+        </div>
+        <!-- No-options case -->
+        <div v-else style="display:flex;gap:6px;">
+          <input v-model="answerDrafts[q.qid||q.id]"
+                 @keydown.enter="submitAnswer(q.qid||q.id, answerDrafts[q.qid||q.id]||'')"
+                 placeholder="reply..." />
+          <button @click="submitAnswer(q.qid||q.id, answerDrafts[q.qid||q.id]||'')">send</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Live tasks -->
+  <section class="card">
+    <h2>Live tasks</h2>
+    <div class="body">
+      <div class="muted" style="margin-bottom:4px;">running</div>
+      <div v-for="t in (state.tasks_running||[])" :key="'r'+t.id" class="row">
+        <span class="tag">#{{ t.id }}</span> {{ t.topic }}
+      </div>
+      <div class="muted" style="margin:6px 0 4px;">
+        queued ({{ (state.tasks_queued||[]).length }})
+      </div>
+      <div v-for="t in (state.tasks_queued||[]).slice(0,12)"
+           :key="'q'+t.id" class="row">
+        <span class="tag">#{{ t.id }}</span> {{ t.topic }}
+      </div>
+      <div class="muted" style="margin:6px 0 4px;">recent done</div>
+      <div v-for="t in (state.tasks_done||[])" :key="'d'+t.id" class="row">
+        <span class="tag ok">✓ #{{ t.id }}</span> {{ t.topic }}
+      </div>
+    </div>
+  </section>
+
+  <!-- Market feeds -->
+  <section class="card">
+    <h2>Market feeds</h2>
+    <div class="body">
+      <div v-for="f in (state.feeds||[])" :key="f.name" class="row">
+        <span class="tag" :class="f.connected?'ok':'bad'">{{ f.connected?'●':'○' }}</span>
+        <b>{{ f.name }}</b>
+        <span class="tag">{{ f.kind || 'trade' }}</span>
+        &nbsp;<span class="mono">
+          {{ f.tick_count }} {{ feedUnit(f.kind) }} · last {{ f.last_tick ? fmtTime(f.last_tick) : '—' }}
+        </span>
+      </div>
+      <div v-if="!(state.feeds||[]).length" class="muted">no feeds</div>
+    </div>
+  </section>
+
+  <!-- KB -->
+  <section class="card">
+    <h2>Knowledge base</h2>
+    <div class="body">
+      <div class="row">tasks <span class="mono">{{ (state.kb_counts||{}).tasks || 0 }}</span></div>
+      <div class="row">notes <span class="mono">{{ (state.kb_counts||{}).notes || 0 }}</span></div>
+      <div class="row">sources <span class="mono">{{ (state.kb_counts||{}).sources || 0 }}</span></div>
+      <div class="row">RAG chunks <span class="mono">{{ state.chroma_chunks || 0 }}</span></div>
+      <div class="row">market ticks <span class="mono">{{ state.ticks_total || 0 }}</span></div>
+      <div class="row">aggtrades <span class="mono">{{ state.aggtrades_total || 0 }}</span></div>
+      <div class="row">depth diffs <span class="mono">{{ state.depth_diffs_total || 0 }}</span></div>
+      <div class="row">db sizes
+        <span class="mono">
+          {{ ((state.db_kb_bytes||0)/1024).toFixed(0) }}K kb ·
+          {{ ((state.db_ticks_bytes||0)/1024).toFixed(0) }}K ticks
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Channels -->
+  <section class="card">
+    <h2>Channels</h2>
+    <div class="body">
+      <div v-for="c in (state.channels||[])" :key="c.name" class="row">
+        <span class="tag" :class="c.connected?'ok':'bad'">{{ c.connected?'●':'○' }}</span>
+        {{ c.name }}
+      </div>
+      <div v-if="!(state.channels||[]).length" class="muted">no channels</div>
+    </div>
+  </section>
+
+  <!-- Curriculum -->
+  <section class="card full">
+    <h2>
+      📚 What I've learned
+      <span class="muted" style="font-weight:normal;font-size:11px;">
+        (overall mastery {{ (state.curriculum_overall_mastery||0).toFixed(1) }}% ·
+        ✅{{ (state.curriculum_counts||{}).solid||0 }}
+        ⚠{{ (state.curriculum_counts||{}).medium||0 }}
+        ❓{{ (state.curriculum_counts||{}).open||0 }})
+      </span>
+      <button @click="regenerateCurriculum"
+              :disabled="curriculumRegenerating"
+              style="float:right;font-size:11px;padding:2px 8px;margin-top:-2px;">
+        {{ curriculumRegenerating ? '⏳ 正在生成…' : '🔄 重新整理' }}
+      </button>
+    </h2>
+    <div class="body">
+      <div class="curriculum-tree" v-if="(state.curriculum||[]).length">
+        <curriculum-node v-for="root in (state.curriculum||[])"
+                         :key="root.id"
+                         :node="root"
+                         @open-modal="openCurrModal"
+                         @ask="askInChat"></curriculum-node>
+      </div>
+      <div v-else class="muted">
+        no curriculum yet — generates after pondr accumulates a few notes
+        (or click 重新整理).
+      </div>
+    </div>
+  </section>
+
+  <!-- Knowledge map -->
+  <section class="card full">
+    <h2>📊 Knowledge map
+      <span class="muted" style="font-weight:normal;font-size:11px;">
+        (known {{ (state.knowledge_counts||{}).known||0 }} ·
+         researching {{ (state.knowledge_counts||{}).researching||0 }} ·
+         unknown {{ (state.knowledge_counts||{}).unknown||0 }})
+      </span>
+    </h2>
+    <div class="body">
+      <details v-for="t in kmapTopics" :key="t" open style="margin-bottom:8px;">
+        <summary style="cursor:pointer;font-weight:600;color:var(--accent);">
+          {{ t }}
+          <span class="muted" style="font-weight:normal;font-size:11px;">
+            (✓{{ kmapGroup(t,'known').length }}
+             ⚠{{ kmapGroup(t,'researching').length }}
+             ❓{{ kmapGroup(t,'unknown').length }})
+          </span>
+        </summary>
+        <div v-for="g in kmapGroup(t,'known')" :key="'k'+g.id"
+             class="row" style="padding-left:18px;font-size:12px;">
+          <span style="color:#4caf6e;">✓</span>
+          <span>{{ g.sub_question }}</span>
+          <span v-if="g.answer_summary" class="muted" style="font-size:11px;">
+            — {{ (g.answer_summary||'').slice(0,200) }}
+          </span>
+        </div>
+        <div v-for="g in kmapGroup(t,'researching')" :key="'r'+g.id"
+             class="row" style="padding-left:18px;font-size:12px;">
+          <span style="color:#f7b955;">⚠</span>
+          <span>{{ g.sub_question }}</span>
+        </div>
+        <div v-for="g in kmapGroup(t,'unknown')" :key="'u'+g.id"
+             class="row" style="padding-left:18px;font-size:12px;">
+          <span style="color:#ef5b5b;">❓</span>
+          <span>{{ g.sub_question }}</span>
+        </div>
+      </details>
+      <div v-if="!kmapTopics.length" class="muted">
+        empty — first reflection runs after warmup; or trigger via API
+      </div>
+    </div>
+  </section>
+
+  <!-- Backtests -->
+  <section class="card full">
+    <h2>📈 Backtests
+      <span class="muted" style="font-weight:normal;font-size:11px;">
+        ({{ (state.recent_backtests||[]).length }})
+      </span>
+    </h2>
+    <div class="body">
+      <details v-for="b in (state.recent_backtests||[])" :key="b.id"
+               style="margin-bottom:6px;border-bottom:1px dotted var(--border);padding-bottom:6px;">
+        <summary style="cursor:pointer;">
+          <span class="tag">#{{ b.id }}</span>
+          <b>{{ b.strategy }}</b> on {{ b.symbol }}
+          <span class="muted" style="font-size:11px;">
+            — sharpe {{ ((b.metrics||{}).sharpe||0).toFixed(2) }} ·
+            DD {{ (((b.metrics||{}).max_drawdown||0)*100).toFixed(1) }}% ·
+            WR {{ (((b.metrics||{}).win_rate||0)*100).toFixed(0) }}% ·
+            PnL {{ ((b.metrics||{}).final_pnl||0).toFixed(2) }} ·
+            {{ b.n_ticks }} ticks
+            <span v-if="b.confidence"> · conf {{ Math.round(b.confidence*100) }}%</span>
+            · {{ new Date(b.created_at*1000).toLocaleString() }}
+          </span>
+        </summary>
+        <pre style="background:var(--bg);padding:6px;font-size:10px;line-height:1.0;border-radius:3px;">{{ b.ascii_curve||'' }}</pre>
+      </details>
+      <div v-if="!(state.recent_backtests||[]).length" class="muted">
+        no backtests yet — bot will run them via run_backtest tool, or trigger manually
+      </div>
+    </div>
+  </section>
+
+  <!-- Arb -->
+  <section class="card full" v-if="(state.recent_arbs||[]).length">
+    <h2>💱 Arb opportunities (24h)
+      <span class="muted" style="font-weight:normal;font-size:11px;">({{ (state.recent_arbs||[]).length }})</span>
+    </h2>
+    <div class="body">
+      <div v-for="a in (state.recent_arbs||[])" :key="a.id"
+           class="row grid-mobile-2" style="display:grid;grid-template-columns:80px 70px 1fr 90px 90px;gap:8px;">
+        <span class="muted">{{ new Date(a.ts*1000).toLocaleTimeString() }}</span>
+        <span><b>{{ a.symbol }}</b></span>
+        <span>buy <span class="ok">{{ a.buy_exchange }}</span> @ {{ (a.buy_price||0).toFixed(2) }} →
+          sell <span class="ok">{{ a.sell_exchange }}</span> @ {{ (a.sell_price||0).toFixed(2) }}</span>
+        <span class="mono">{{ (a.spread_bp||0).toFixed(1) }}bp gross</span>
+        <span class="mono" :class="a.net_spread_bp>0?'ok':'bad'">{{ (a.net_spread_bp||0).toFixed(1) }}bp net</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Orderbook imbalances -->
+  <section class="card full" v-if="(state.recent_imbalances||[]).length">
+    <h2>📊 Orderbook imbalances (recent)
+      <span class="muted" style="font-weight:normal;font-size:11px;">({{ (state.recent_imbalances||[]).length }})</span>
+    </h2>
+    <div class="body">
+      <div v-for="(o, i) in (state.recent_imbalances||[])" :key="'ob'+i+'-'+o.ts"
+           class="row grid-mobile-2" style="display:grid;grid-template-columns:80px 110px 60px 1fr;gap:8px;">
+        <span class="muted">{{ new Date(o.ts*1000).toLocaleTimeString() }}</span>
+        <span><b>{{ o.symbol }}</b> @ {{ o.source }}</span>
+        <span :class="(o.ratio>3||o.ratio<0.33)?'warn':'muted'">{{ (o.ratio||0).toFixed(2) }}x</span>
+        <span class="muted">
+          {{ o.ratio>1 ? '↑ bid heavy' : '↓ ask heavy' }} · top {{ o.levels||'?' }} ·
+          bid_vol {{ (o.bid_vol||0).toFixed(2) }} ask_vol {{ (o.ask_vol||0).toFixed(2) }}
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Findings -->
+  <section class="card full">
+    <h2>📌 Recent findings (with confidence)</h2>
+    <div class="body">
+      <div v-for="f in (state.recent_findings||[]).slice(0,12)" :key="f.id"
+           class="row grid-mobile-stack" style="display:grid;grid-template-columns:1fr 100px;gap:8px;align-items:center;">
+        <div>
+          <span class="muted" style="font-size:11px;">
+            {{ f.created_at ? new Date(f.created_at*1000).toLocaleTimeString() : '?' }} ·
+            {{ f.topic||'' }} · src×{{ f.source_count||1 }}
+          </span><br>{{ f.content||'' }}
+        </div>
+        <div :title="f.confidence_reason||''" style="text-align:right;">
+          <template v-if="f.confidence==null"><span class="muted">no score</span></template>
+          <template v-else>
+            <div style="display:inline-block;width:80px;height:8px;background:#262b34;border-radius:3px;overflow:hidden;">
+              <div :style="{width: Math.round((f.confidence||0)*100)+'%', height:'100%', background: confColor(f.confidence)}"></div>
+            </div>
+            <div :style="{fontSize:'11px', color: confColor(f.confidence)}">
+              {{ Math.round((f.confidence||0)*100) }}%
+            </div>
+          </template>
+        </div>
+      </div>
+      <div v-if="!(state.recent_findings||[]).length" class="muted">no findings yet</div>
+    </div>
+  </section>
+
+  <!-- Capability gaps -->
+  <section class="card full" v-if="(state.capability_gaps||[]).length">
+    <h2>🔧 Capability gaps
+      <span class="muted" style="font-weight:normal;font-size:11px;">({{ (state.capability_gaps||[]).length }})</span>
+    </h2>
+    <div class="body">
+      <div v-for="g in (state.capability_gaps||[])" :key="g.id"
+           class="row grid-mobile-2"
+           :style="{display:'grid',gridTemplateColumns:'30px 1fr 60px 60px 60px',gap:'6px',alignItems:'center',borderLeft:'3px solid '+capSevBorder(g.severity),paddingLeft:'6px'}">
+        <span :class="capSevClass(g.severity)" title="severity">{{ g.severity }}/5</span>
+        <span>
+          <b>{{ g.capability }}</b><br>
+          <span class="muted" style="font-size:11px;">
+            {{ g.why_needed||'' }}<span v-if="g.suggested_solution"> · 💡 {{ g.suggested_solution }}</span>
+          </span>
+        </span>
+        <span class="mono muted">×{{ g.report_count }}</span>
+        <button style="padding:2px 6px;font-size:11px;" @click="capStatus(g.id, 'resolved')">✓</button>
+        <button style="padding:2px 6px;font-size:11px;" @click="capStatus(g.id, 'dismissed')">✕</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Preferences -->
+  <section class="card full">
+    <h2>User preferences <span class="muted" style="font-weight:normal;font-size:11px;">({{ (state.preferences||[]).length }})</span></h2>
+    <div class="body">
+      <div v-for="p in (state.preferences||[])" :key="p.key"
+           class="row grid-mobile-stack"
+           style="display:grid;grid-template-columns:120px 1fr 100px 90px;gap:6px;align-items:center;">
+        <span class="mono"><b>{{ p.key }}</b></span>
+        <span>{{ p.value }}</span>
+        <span class="tag">{{ p.category||'general' }}</span>
+        <span style="display:flex;gap:4px;">
+          <span class="muted" style="font-size:10px;">via {{ p.added_via_channel||'?' }}</span>
+          <button style="padding:2px 6px;font-size:11px;" @click="delPref(p.key)">×</button>
+        </span>
+      </div>
+      <div v-if="!(state.preferences||[]).length" class="muted">
+        no preferences yet — bot will populate as user gives long-lived instructions
+      </div>
+      <div style="margin-top:8px;display:grid;grid-template-columns:1fr 2fr 1fr auto;gap:6px;align-items:center;"
+           class="grid-mobile-stack">
+        <input v-model="prefDraft.key" placeholder="key (e.g. language)" />
+        <input v-model="prefDraft.value" placeholder="value (e.g. 繁體中文)" />
+        <select v-model="prefDraft.category"
+                style="background:var(--panel2);color:var(--fg);border:1px solid var(--border);padding:5px;border-radius:4px;">
+          <option value="general">general</option>
+          <option value="communication">communication</option>
+          <option value="workflow">workflow</option>
+          <option value="notification">notification</option>
+          <option value="research">research</option>
+        </select>
+        <button @click="addPref">save</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- LLM I/O log -->
+  <!-- LLM stats summary -->
+  <section class="card full">
+    <h2>📊 LLM Stats
+      <span class="muted" style="font-weight:normal;font-size:11px;">
+        (24h · concurrency {{ (state.llm_stats||{}).llm_in_flight||0 }}/{{ (state.llm_stats||{}).llm_concurrency_limit||1 }} in-flight)
+      </span>
+    </h2>
+    <div class="body">
+      <div class="row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:6px 12px;">
+        <div>calls: <b>{{ (state.llm_stats||{}).count||0 }}</b>
+          <span class="muted">/ 1h {{ (state.llm_stats||{}).count_1h||0 }}
+            / lifetime {{ (state.llm_stats||{}).count_lifetime||0 }}</span></div>
+        <div>mean latency: <b>{{ fmtSec((state.llm_stats||{}).mean_latency_ms) }}</b>
+          <span class="muted">· p50 {{ fmtSec((state.llm_stats||{}).p50_latency_ms) }}
+            · p95 {{ fmtSec((state.llm_stats||{}).p95_latency_ms) }}
+            · max {{ fmtSec((state.llm_stats||{}).max_latency_ms) }}</span></div>
+        <div>mean prompt tokens: <b>{{ Math.round((state.llm_stats||{}).mean_prompt_tokens||0) }}</b></div>
+        <div>mean completion tokens: <b>{{ Math.round((state.llm_stats||{}).mean_completion_tokens||0) }}</b></div>
+        <div>total tokens: <b>{{ ((state.llm_stats||{}).total_prompt_tokens||0).toLocaleString() }}p
+          / {{ ((state.llm_stats||{}).total_completion_tokens||0).toLocaleString() }}c</b></div>
+        <div>throughput: <b>{{ ((state.llm_stats||{}).mean_compl_tok_per_s||0).toFixed(1) }}</b> tok/s</div>
+        <div>failures: <b :class="((state.llm_stats||{}).failures||0)>0 ? 'bad' : ''">{{ (state.llm_stats||{}).failures||0 }}</b></div>
+      </div>
+      <div class="muted" style="margin-top:8px;font-size:11px;">by kind:
+        <span v-for="(n, k) in ((state.llm_stats||{}).by_kind||{})" :key="k"
+              style="margin-right:8px;" class="mono">
+          {{ k }}={{ n }}
+        </span>
+      </div>
+      <div style="margin-top:8px;font-family:var(--mono);font-size:12px;line-height:1.05;">
+        <div>calls/min   <span class="mono">{{ sparkline((state.llm_stats||{}).calls_per_min_60) }}</span></div>
+        <div>latency/min <span class="mono">{{ sparkline((state.llm_stats||{}).mean_latency_per_min_60) }}</span></div>
+      </div>
+      <div v-if="((state.llm_stats||{}).top_slowest||[]).length" style="margin-top:8px;">
+        <div class="muted" style="font-size:11px;">top 5 slowest:</div>
+        <ul style="margin:4px 0 0 18px;padding:0;font-size:12px;">
+          <li v-for="c in ((state.llm_stats||{}).top_slowest||[])" :key="c.ts">
+            <span class="mono">{{ fmtSec(c.latency_ms) }}</span> · {{ c.kind }}
+            · <span class="muted">{{ (c.prompt_preview||'').slice(0,80) }}</span>
+            · <span class="mono muted">{{ c.prompt_tokens }}p / {{ c.completion_tokens }}c</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="card full">
+    <h2>LLM I/O log (live tail)</h2>
+    <div class="body" style="max-height:380px;">
+      <details v-for="r in llmReversed" :key="r.trace_id || r.ts" class="llm-row">
+        <summary>
+          <b>{{ r.ts||'' }}</b> · {{ r.kind }} · {{ r.model }} · {{ r.latency_ms }}ms ·
+          t={{ ((r.tokens && (r.tokens.prompt||0)+'+'+ (r.tokens.completion||0))||'?') }}
+          <template v-if="(r.function_calls||[]).length">· calls: {{ (r.function_calls||[]).map(c=>c.name).join(',') }}</template>
+          <br><span class="muted">{{ llmFirstMsg(r).slice(0,160) }}</span>
+        </summary>
+        <div><b>response:</b><pre>{{ llmAnswer(r).slice(0, 2000) }}</pre></div>
+        <div v-if="(r.function_calls||[]).length"><b>tool calls:</b><pre>{{ JSON.stringify(r.function_calls, null, 2) }}</pre></div>
+      </details>
+      <div v-if="!llmReversed.length" class="muted">no LLM calls yet</div>
+    </div>
+  </section>
+
+  <!-- Event timeline -->
+  <section class="card full">
+    <h2>Event timeline</h2>
+    <div class="body">
+      <div v-for="(e, i) in eventsReversed" :key="i+'-'+e.ts" class="row mono">
+        <span class="muted">{{ fmtTime(e.ts) }}</span>
+        <b>{{ e.kind }}</b>
+        <span class="muted">{{ JSON.stringify(stripEvent(e)) }}</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Chat -->
+  <section class="card full">
+    <h2>Chat (ws://localhost:{{ wsPort }})</h2>
+    <!-- wsPort is set from window.__PONDR__.wsPort in data() -->
+    <div class="body">
+      <div ref="chatlog" style="max-height:200px;overflow:auto;border:1px solid var(--border);padding:6px;border-radius:3px;background:var(--bg);">
+        <div v-for="(line, i) in chatLog" :key="i" class="chat-line">
+          <span class="who" :style="line.who==='you' ? 'color:#9bd9ad' : ''">{{ line.who }}</span>
+          {{ line.text }}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <input v-model="chatDraft"
+               @keydown.enter="sendChat"
+               placeholder="message or /topic NEW_TOPIC" />
+        <button @click="sendChat">send</button>
+      </div>
+      <div style="margin-top:6px;color:var(--muted);font-size:11px;">
+        Add topic:
+        <input v-model="topicDraft" placeholder="add new research topic" style="margin-top:3px;" />
+        <button @click="addTopic">queue</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Curriculum drill-down modal -->
+<div class="modal-backdrop" :class="{open: !!currModal}" @click.self="closeCurrModal">
+  <div class="modal" v-if="currModal">
+    <button class="close-btn" @click="closeCurrModal">×</button>
+    <h3>{{ statusIcon(currModal.status||'open') }} {{ currModal.title||'' }}</h3>
+    <div class="muted" style="font-size:11px;">
+      mastery {{ (currModal.mastery_pct||0).toFixed(0) }}% ·
+      status {{ currModal.status||'open' }} ·
+      {{ (currModal.note_ids||[]).length }} notes ·
+      {{ (currModal.related_backtest_ids||[]).length }} backtests ·
+      {{ (currModal.related_gap_ids||[]).length }} gaps
+    </div>
+    <div style="margin-top:8px;">
+      <template v-if="currModal.description">{{ currModal.description }}</template>
+      <span v-else class="muted">(no description)</span>
+    </div>
+    <div class="section">
+      <h4>📌 Linked findings</h4>
+      <div v-for="n in (currModal.notes_full||[])" :key="'n'+n.id" class="row">
+        <span class="muted">
+          {{ n.topic||'' }}<template v-if="n.confidence!=null"> · conf {{ Math.round(n.confidence*100) }}%</template>
+        </span><br>
+        {{ (n.content||'').slice(0,300) }}
+      </div>
+      <div v-if="!(currModal.notes_full||[]).length" class="muted">none</div>
+    </div>
+    <div class="section">
+      <h4>📈 Linked backtests</h4>
+      <details v-for="b in (currModal.backtests_full||[])" :key="'bt'+b.id">
+        <summary>#{{ b.id }} <b>{{ b.strategy||'' }}</b> on {{ b.symbol||'' }} —
+          sharpe {{ ((b.metrics||{}).sharpe||0).toFixed(2) }} ·
+          DD {{ (((b.metrics||{}).max_drawdown||0)*100).toFixed(1) }}% ·
+          {{ b.n_ticks }} ticks</summary>
+        <pre style="background:var(--bg);padding:6px;font-size:10px;line-height:1.0;border-radius:3px;">{{ b.ascii_curve||'' }}</pre>
+      </details>
+      <div v-if="!(currModal.backtests_full||[]).length" class="muted">none</div>
+    </div>
+    <div class="section">
+      <h4>❓ Open sub-questions</h4>
+      <div v-for="g in (currModal.gaps_full||[])" :key="'g'+g.id" class="row">
+        <span class="tag">{{ g.status||'' }}</span> {{ g.sub_question||'' }}
+      </div>
+      <div v-if="!(currModal.gaps_full||[]).length" class="muted">none</div>
+    </div>
+    <div class="section">
+      <button @click="deepDiveModal">🔍 重 query 這個主題 (queue deep-dive)</button>
+      <button @click="askInChatFromModal" style="margin-left:6px;">💬 ask in chat</button>
+    </div>
+  </div>
+</div>
+
+</div>
+{% endraw %}
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+{% raw %}
+<script>
+(function(){
+  const { createApp, computed, reactive, toRefs } = Vue;
+
+  // Recursive curriculum-tree component (registered before app mount).
+  const CurriculumNode = {
+    name: 'curriculum-node',
+    props: ['node'],
+    emits: ['open-modal', 'ask'],
+    template: `
+      <details v-if="(node.children||[]).length" open>
+        <summary>
+          {{ icon }} <b>{{ node.title||'' }}</b>
+          <span class="meta">— mastery {{ (node.mastery_pct||0).toFixed(0) }}%</span>
+          <span style="float:right;">
+            <button class="deep-dive-btn" @click.stop.prevent="$emit('open-modal', node.id)">深入</button>
+          </span>
+        </summary>
+        <div v-if="node.description" class="muted" style="font-size:11px;padding-left:12px;">{{ node.description }}</div>
+        <ul>
+          <curriculum-leaf v-for="c in (node.children||[])" :key="c.id" :node="c"
+                           @open-modal="$emit('open-modal', $event)"
+                           @ask="$emit('ask', $event)"></curriculum-leaf>
+        </ul>
+      </details>
+      <ul v-else>
+        <curriculum-leaf :node="node"
+                         @open-modal="$emit('open-modal', $event)"
+                         @ask="$emit('ask', $event)"></curriculum-leaf>
+      </ul>
+    `,
+    computed: {
+      icon() {
+        const s = (this.node.status||'open').toLowerCase();
+        return s==='solid' ? '✅' : s==='medium' ? '⚠️' : '❓';
+      }
+    }
+  };
+
+  const CurriculumLeaf = {
+    name: 'curriculum-leaf',
+    props: ['node'],
+    emits: ['open-modal', 'ask'],
+    template: `
+      <li :class="status">
+        <span class="icon">{{ icon }}</span>
+        <span>
+          <b>{{ node.title||'' }}</b>
+          <div v-if="node.description" class="muted" style="font-size:11px;">{{ node.description }}</div>
+        </span>
+        <span class="meta">{{ meta }}</span>
+        <span class="mbar" :title="'mastery '+(node.mastery_pct||0).toFixed(0)+'%'">
+          <div :style="{width: Math.max(0,Math.min(100, node.mastery_pct||0))+'%', background: masteryColor}"></div>
+        </span>
+        <span style="display:flex;gap:4px;">
+          <button class="deep-dive-btn" @click="$emit('open-modal', node.id)">深入</button>
+          <button class="ask-btn" @click="$emit('ask', node.title||'')">💬</button>
+        </span>
+      </li>
+    `,
+    computed: {
+      status() { return (this.node.status||'open').toLowerCase(); },
+      icon() {
+        const s = this.status;
+        return s==='solid' ? '✅' : s==='medium' ? '⚠️' : '❓';
+      },
+      masteryColor() {
+        const p = this.node.mastery_pct||0;
+        return p>=75 ? '#4caf6e' : p>=40 ? '#f7b955' : '#ef5b5b';
+      },
+      meta() {
+        const n = this.node;
+        return `${(n.note_ids||[]).length} notes · ${(n.related_backtest_ids||[]).length} bts · ${(n.related_gap_ids||[]).length} gaps`;
+      }
+    }
+  };
+
+  const App = {
+    components: { 'curriculum-node': CurriculumNode, 'curriculum-leaf': CurriculumLeaf },
+    data() {
+      return {
+        // Filled by /api/state initial load + SSE patches
+        state: {},
+        // SSE & polling state
+        sse: null,
+        sseConnected: false,
+        pollTimer: null,
+        // Local UI state — survives state refresh because Vue patches reactively
+        answerDrafts: {},
+        chatDraft: '',
+        topicDraft: '',
+        prefDraft: { key:'', value:'', category:'general' },
+        chatLog: [],
+        chatWs: null,
+        chatWsTimer: null,
+        currModal: null,
+        curriculumRegenerating: false,
+        // Initial topic injected from server (window.__PONDR__)
+        initialTopic: (window.__PONDR__||{}).initialTopic || '',
+        wsPort: (window.__PONDR__||{}).wsPort || 8765,
+        dashPort: (window.__PONDR__||{}).dashPort || 8090,
+      };
+    },
+    computed: {
+      connStateClass() {
+        if (this.sseConnected) return 'sse-on';
+        if (this.pollTimer) return 'sse-poll';
+        return 'sse-off';
+      },
+      connStateIcon() {
+        if (this.sseConnected) return '●';
+        if (this.pollTimer) return '◐';  // polling fallback
+        return '○';
+      },
+      totalTokens() {
+        let toks = 0;
+        for (const r of (this.state.llm_recent||[])) {
+          if (r.tokens) toks += (r.tokens.prompt||0) + (r.tokens.completion||0);
+        }
+        return toks;
+      },
+      llmReversed() { return ((this.state.llm_recent||[]).slice()).reverse(); },
+      eventsReversed() { return ((this.state.events||[]).slice()).reverse().slice(0,30); },
+      kmapTopics() { return Object.keys(this.state.knowledge_map||{}).sort(); },
+    },
+    methods: {
+      fmtTime(ts) { if (!ts) return '—'; return new Date(ts*1000).toLocaleTimeString(); },
+      fmtSec(ms) {
+        if (ms == null || isNaN(ms)) return '—';
+        const n = Number(ms);
+        if (n < 1000) return n.toFixed(0)+'ms';
+        return (n/1000).toFixed(1)+'s';
+      },
+      sparkline(data) {
+        const chars = ['▁','▂','▃','▄','▅','▆','▇','█'];
+        if (!Array.isArray(data) || !data.length) return '';
+        const max = Math.max.apply(null, data.concat([1]));
+        return data.map(v => {
+          if (!v) return '·';
+          const idx = Math.min(7, Math.max(0, Math.floor((v / max) * 8)));
+          return chars[idx];
+        }).join('');
+      },
+      fmtAgo(s) {
+        if (s == null) return '—';
+        if (s<60) return s.toFixed(0)+'s';
+        if (s<3600) return (s/60).toFixed(1)+'m';
+        return (s/3600).toFixed(1)+'h';
+      },
+      feedUnit(kind) { return kind === 'depth' ? 'depth msgs' : kind === 'aux' ? 'msgs' : 'ticks'; },
+      confColor(c) {
+        if (c == null) return '#7c8492';
+        return c>=0.8 ? '#4caf6e' : c>=0.5 ? '#f7b955' : '#ef5b5b';
+      },
+      capSevClass(s) { return s>=4 ? 'bad' : s>=3 ? 'warn' : 'muted'; },
+      capSevBorder(s) { return s>=4 ? 'var(--bad)' : s>=3 ? 'var(--warn)' : 'var(--border)'; },
+      statusIcon(s) {
+        s = (s||'open').toLowerCase();
+        return s==='solid' ? '✅' : s==='medium' ? '⚠️' : '❓';
+      },
+      stripEvent(e) {
+        const o = Object.assign({}, e);
+        delete o.ts; delete o.kind; return o;
+      },
+      kmapGroup(topic, status) {
+        return ((this.state.knowledge_map||{})[topic]||[])
+          .filter(i => (i.status||'unknown') === status);
+      },
+      llmFirstMsg(r) {
+        const fst = r.messages && r.messages[0] && r.messages[0].content;
+        if (!fst) return '';
+        return typeof fst === 'string' ? fst : JSON.stringify(fst);
+      },
+      llmAnswer(r) {
+        try { return r.response.choices[0].message.content || ''; }
+        catch(e) { return ''; }
+      },
+      // ---- API actions ----
+      async submitAnswer(qid, answer) {
+        const v = (answer||'').trim();
+        try {
+          await fetch('/api/answer', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({qid, answer: v}),
+          });
+          delete this.answerDrafts[qid];
+        } catch(e) { alert('Network error: '+e); }
+      },
+      async addTopic() {
+        const v = (this.topicDraft||'').trim();
+        if (!v) return;
+        await fetch('/api/topic', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({topic: v}),
+        });
+        this.topicDraft = '';
+      },
+      async capStatus(id, status) {
+        await fetch('/api/capability_gaps/'+id+'/status', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({status}),
+        });
+      },
+      async addPref() {
+        const k = (this.prefDraft.key||'').trim();
+        const v = (this.prefDraft.value||'').trim();
+        if (!k || !v) return;
+        await fetch('/api/prefs', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({key:k, value:v, category: this.prefDraft.category}),
+        });
+        this.prefDraft.key = ''; this.prefDraft.value = '';
+      },
+      async delPref(key) {
+        if (!confirm('delete preference: '+key+'?')) return;
+        await fetch('/api/prefs/'+encodeURIComponent(key), {method:'DELETE'});
+      },
+      async regenerateCurriculum() {
+        if (this.curriculumRegenerating) return;
+        this.curriculumRegenerating = true;
+        try {
+          const r = await fetch('/api/curriculum/regenerate', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:'{"force":true}',
+          });
+          const j = await r.json();
+          if (j.error) alert('regenerate failed: '+j.error);
+        } catch(e) { alert('regenerate error: '+e); }
+        this.curriculumRegenerating = false;
+      },
+      async openCurrModal(nodeId) {
+        try {
+          const r = await fetch('/api/curriculum/'+nodeId);
+          if (!r.ok) { alert('node not found'); return; }
+          this.currModal = await r.json();
+        } catch(e) { alert('Failed to load: '+e); }
+      },
+      closeCurrModal() { this.currModal = null; },
+      async deepDiveModal() {
+        if (!this.currModal || !this.currModal.id) return;
+        const r = await fetch('/api/curriculum/'+this.currModal.id+'/deep_dive', {method:'POST'});
+        const j = await r.json();
+        alert(j.ok ? ('queued task #'+j.task_id+': '+j.title) : ('error: '+(j.error||'?')));
+      },
+      askInChatFromModal() {
+        const t = this.currModal && this.currModal.title || '';
+        this.closeCurrModal();
+        this.askInChat(t);
+      },
+      askInChat(title) {
+        this.chatDraft = '請告訴我關於 '+title+' 你目前知道什麼';
+        this.$nextTick(() => {
+          const el = document.querySelector('input[placeholder^="message or"]');
+          if (el) el.focus();
+        });
+      },
+      sendChat() {
+        const v = (this.chatDraft||'').trim();
+        if (!v) return;
+        if (v.startsWith('/topic ')) {
+          this.topicDraft = v.slice(7); this.addTopic(); this.chatDraft=''; return;
+        }
+        if (this.chatWs && this.chatWs.readyState === 1) {
+          this.chatWs.send(JSON.stringify({type:'chat', text:v}));
+        }
+        this.chatLog.push({who:'you', text:v});
+        this.chatDraft = '';
+        this.$nextTick(() => {
+          const el = this.$refs.chatlog;
+          if (el) el.scrollTop = el.scrollHeight;
+        });
+      },
+      // ---- Connection management ----
+      async fetchState() {
+        try {
+          const r = await fetch('/api/state');
+          this.state = await r.json();
+        } catch(e) { /* ignore */ }
+      },
+      connectChatWs() {
+        try {
+          this.chatWs = new WebSocket('ws://'+location.hostname+':'+this.wsPort);
+          this.chatWs.onmessage = ev => {
+            this.chatLog.push({who:'bot', text: ev.data});
+            this.$nextTick(() => {
+              const el = this.$refs.chatlog;
+              if (el) el.scrollTop = el.scrollHeight;
+            });
+          };
+          this.chatWs.onclose = () => {
+            clearTimeout(this.chatWsTimer);
+            this.chatWsTimer = setTimeout(() => this.connectChatWs(), 2000);
+          };
+        } catch(e) {
+          clearTimeout(this.chatWsTimer);
+          this.chatWsTimer = setTimeout(() => this.connectChatWs(), 2000);
+        }
+      },
+      connectSse() {
+        try { if (this.sse) this.sse.close(); } catch(e) {}
+        const es = new EventSource('/api/stream');
+        this.sse = es;
+        es.onopen = () => {
+          this.sseConnected = true;
+          // SSE alive — slow down the polling fallback
+          if (this.pollTimer) {
+            clearInterval(this.pollTimer);
+            this.pollTimer = setInterval(() => this.fetchState(), 60000);
+          }
+        };
+        es.onerror = () => {
+          this.sseConnected = false;
+          // Fall back to faster polling until SSE recovers
+          if (this.pollTimer) clearInterval(this.pollTimer);
+          this.pollTimer = setInterval(() => this.fetchState(), 30000);
+          // EventSource auto-reconnects; but if it gives up, retry manually
+          setTimeout(() => { if (!this.sseConnected) this.connectSse(); }, 5000);
+        };
+        es.onmessage = ev => {
+          let frame;
+          try { frame = JSON.parse(ev.data); } catch(e) { return; }
+          this.applyEvent(frame);
+        };
+      },
+      // Patch state in response to an SSE frame.
+      applyEvent(frame) {
+        if (!frame || !frame.type) return;
+        if (frame.type === 'snapshot') {
+          this.state = frame.state || {};
+          return;
+        }
+        if (frame.type === 'ping') return;
+
+        const p = frame.payload || {};
+        const s = this.state || {};
+
+        switch (frame.type) {
+          case 'tick_count_update': {
+            const all = []
+              .concat((p.trade||[]).map(f => Object.assign({}, f, {kind:'trade'})))
+              .concat((p.depth||[]).map(f => Object.assign({}, f, {kind:'depth'})))
+              .concat((p.aux||[]).map(f => Object.assign({}, f, {kind:'aux'})));
+            s.feeds = all;
+            break;
+          }
+          case 'task_added': {
+            const t = { id: p.id, topic: p.topic, status: p.status||'queued',
+                        description: p.description, parent_id: p.parent_id };
+            s.tasks_queued = [t].concat((s.tasks_queued||[])).slice(0, 50);
+            break;
+          }
+          case 'task_update': {
+            const move = (arr) => (arr||[]).filter(t => t.id !== p.id);
+            const found = []
+              .concat(s.tasks_running||[], s.tasks_queued||[], s.tasks_done||[])
+              .find(t => t && t.id === p.id);
+            const row = found ? Object.assign({}, found, {status: p.status}) : {id: p.id, status: p.status};
+            s.tasks_running = move(s.tasks_running);
+            s.tasks_queued = move(s.tasks_queued);
+            s.tasks_done = move(s.tasks_done);
+            if (p.status === 'running') {
+              s.tasks_running = [row].concat(s.tasks_running||[]);
+            } else if (p.status === 'done' || p.status === 'failed') {
+              s.tasks_done = [row].concat(s.tasks_done||[]).slice(0,10);
+            } else {
+              s.tasks_queued = [row].concat(s.tasks_queued||[]);
+            }
+            break;
+          }
+          case 'finding_added': {
+            const f = { id: p.id, topic: p.topic, content: p.content,
+                        confidence: p.confidence, source_count: p.source_count,
+                        created_at: frame.ts };
+            s.recent_findings = [f].concat(s.recent_findings||[]).slice(0, 50);
+            break;
+          }
+          case 'llm_io_logged': {
+            const rec = (p.rec) || p;
+            if (!rec) break;
+            s.llm_recent = (s.llm_recent||[]).concat([rec]).slice(-50);
+            break;
+          }
+          case 'question_added': {
+            s.questions = [p].concat(s.questions||[]);
+            break;
+          }
+          case 'question_answered':
+          case 'question_timed_out': {
+            s.questions = (s.questions||[]).filter(q => (q.qid||q.id) !== p.qid);
+            break;
+          }
+          case 'capability_gap_added':
+          case 'capability_gap_updated': {
+            const row = p.row || p;
+            const id = row.id || p.id;
+            const list = (s.capability_gaps||[]).slice();
+            const idx = list.findIndex(g => g.id === id);
+            if (idx >= 0) {
+              list[idx] = Object.assign({}, list[idx], row);
+            } else if (frame.type === 'capability_gap_added') {
+              list.unshift(row);
+            }
+            // Filter out closed statuses (resolved/dismissed) since the
+            // card only shows open gaps.
+            s.capability_gaps = list.filter(g => !g.status || g.status === 'open');
+            break;
+          }
+          case 'preference_changed': {
+            // Cheap correct fix: refetch the small prefs list.
+            this.refreshPrefs();
+            break;
+          }
+          case 'curriculum_updated': {
+            // Tree changed — request the latest snapshot.
+            this.refreshCurriculum();
+            break;
+          }
+          case 'arb_opportunity': {
+            s.recent_arbs = [p].concat(s.recent_arbs||[]).slice(0, 30);
+            break;
+          }
+          case 'orderbook_alert': {
+            // Re-uses the imbalances surface; backend includes more fields,
+            // we only need the alert metadata for the card.
+            s.recent_imbalances = [Object.assign({ts: frame.ts}, p)]
+              .concat(s.recent_imbalances||[]).slice(0, 30);
+            break;
+          }
+          case 'llm_stats_updated': {
+            if (p && p.stats) s.llm_stats = p.stats;
+            break;
+          }
+        }
+      },
+      async refreshPrefs() {
+        try {
+          const r = await fetch('/api/prefs');
+          const j = await r.json();
+          if (j.preferences) this.state.preferences = j.preferences;
+        } catch(e) {}
+      },
+      async refreshCurriculum() {
+        try {
+          const r = await fetch('/api/curriculum');
+          const j = await r.json();
+          if (j.tree) {
+            this.state.curriculum = j.tree;
+            this.state.curriculum_overall_mastery = j.overall_mastery_pct;
+            this.state.curriculum_counts = j.counts;
+          }
+        } catch(e) {}
+      },
+    },
+    async mounted() {
+      await this.fetchState();
+      this.connectSse();
+      this.connectChatWs();
+      // Polling fallback — slow when SSE is healthy, faster when it isn't.
+      // The actual interval is reset by the SSE open/error handlers.
+      this.pollTimer = setInterval(() => this.fetchState(), 30000);
+    },
+    beforeUnmount() {
+      try { if (this.sse) this.sse.close(); } catch(e) {}
+      try { if (this.chatWs) this.chatWs.close(); } catch(e) {}
+      if (this.pollTimer) clearInterval(this.pollTimer);
+      if (this.chatWsTimer) clearTimeout(this.chatWsTimer);
+    }
+  };
+
+  const app = createApp(App);
+  app.mount('#app');
+})();
+</script>
+{% endraw %}
+</body>
+</html>

@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+data/research_kb.db*
+data/market_ticks.db*
+data/chroma/
+data/logs/
+data/raw/
+.env
+.DS_Store
+*.log
+build/
+dist/
+data/preferences.md
