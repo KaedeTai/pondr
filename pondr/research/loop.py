@@ -13,6 +13,9 @@ from .reflector import reflect
 from .triangulation_ask import triangulate as _triangulate_finding
 
 
+import os
+TASK_TIMEOUT_S = int(os.getenv("PONDR_TASK_TIMEOUT_S", "600"))  # 10 min default
+
 CURRENT: dict = {"task_id": None, "topic": None, "started": None}
 
 
@@ -34,6 +37,47 @@ async def _seed_initial():
     event("seeded", n=len(seeds))
 
 
+
+
+async def _run_task(task):
+    """Per-task body, called with asyncio.wait_for timeout in run()."""
+    if (task.get("topic") or "").startswith("[triangulate]"):
+        try:
+            out = await _triangulate_finding(task)
+            summary = out.get("summary") or "triangulation completed"
+        except Exception as e:
+            logger.warning(f"triangulate failed: {e}")
+            summary = f"triangulate error: {e}"
+        await kb_sql.complete_task(task["id"], result=summary)
+        event("task_done", id=task["id"], triangulated=True)
+        await MUX.send({"type": "finding", "msg": summary,
+                        "topic": task["topic"]})
+        return
+
+    subs = await plan(task["topic"])
+    results: list[dict] = []
+    for sub in subs:
+        flag, reason = intr.peek_interrupt()
+        if flag:
+            event("interrupt_handled", reason=reason)
+            intr.clear_interrupt()
+            await MUX.send({"type": "interrupted", "reason": reason})
+            break
+        try:
+            r = await execute(sub, parent_topic=task["topic"])
+            results.append(r)
+        except Exception as e:
+            logger.warning(f"subtask failed: {e}")
+            results.append({"title": sub.get("title"), "answer": f"error: {e}"})
+    synth = await synthesize(task["topic"], results)
+    await MUX.send({"type": "finding", "msg": synth.get("finding"),
+                    "topic": task["topic"]})
+    followups = await reflect(task["topic"], synth.get("finding", ""))
+    for ft in followups:
+        await kb_sql.add_task(ft, description="follow-up", parent_id=task["id"])
+    await kb_sql.complete_task(task["id"], result=synth.get("finding", ""))
+    event("task_done", id=task["id"], followups=len(followups))
+
 async def run():
     await kb_sql.init()
     await _seed_initial()
@@ -50,46 +94,19 @@ async def run():
             event("task_start", id=task["id"], topic=task["topic"])
             await MUX.send({"type": "task_start", "id": task["id"], "topic": task["topic"]})
 
-            # Triangulation tasks short-circuit the planner — we already know
-            # exactly what we want to do (verify a known finding) and the
-            # planner-LLM otherwise generates an ask_user with the bare topic
-            # id, which is meaningless to the user. See triangulation_ask.py.
-            if (task.get("topic") or "").startswith("[triangulate]"):
-                try:
-                    out = await _triangulate_finding(task)
-                    summary = out.get("summary") or "triangulation completed"
-                except Exception as e:
-                    logger.warning(f"triangulate failed: {e}")
-                    summary = f"triangulate error: {e}"
-                await kb_sql.complete_task(task["id"], result=summary)
-                event("task_done", id=task["id"], triangulated=True)
-                await MUX.send({"type": "finding", "msg": summary,
-                                "topic": task["topic"]})
-                continue
-
-            subs = await plan(task["topic"])
-            results: list[dict] = []
-            for sub in subs:
-                flag, reason = intr.peek_interrupt()
-                if flag:
-                    event("interrupt_handled", reason=reason)
-                    intr.clear_interrupt()
-                    await MUX.send({"type": "interrupted", "reason": reason})
-                    break
-                try:
-                    r = await execute(sub, parent_topic=task["topic"])
-                    results.append(r)
-                except Exception as e:
-                    logger.warning(f"subtask failed: {e}")
-                    results.append({"title": sub.get("title"), "answer": f"error: {e}"})
-            synth = await synthesize(task["topic"], results)
-            await MUX.send({"type": "finding", "msg": synth.get("finding"),
-                            "topic": task["topic"]})
-            followups = await reflect(task["topic"], synth.get("finding", ""))
-            for ft in followups:
-                await kb_sql.add_task(ft, description="follow-up", parent_id=task["id"])
-            await kb_sql.complete_task(task["id"], result=synth.get("finding", ""))
-            event("task_done", id=task["id"], followups=len(followups))
+            try:
+                await asyncio.wait_for(_run_task(task), timeout=TASK_TIMEOUT_S)
+            except asyncio.TimeoutError:
+                logger.warning(f"task #{task['id']} timed out after {TASK_TIMEOUT_S}s — cancelling")
+                event("task_timeout", id=task["id"], topic=task["topic"], timeout_s=TASK_TIMEOUT_S)
+                await kb_sql.complete_task(task["id"], result=f"[timeout after {TASK_TIMEOUT_S}s]")
+                # mark as cancelled instead of done so it doesn't pollute results
+                # (complete_task sets status='done'; override:)
+                import aiosqlite
+                async with aiosqlite.connect(config.DB_KB) as db:
+                    await db.execute("UPDATE tasks SET status='timeout' WHERE id=?", (task["id"],))
+                    await db.commit()
+                await MUX.send({"type": "task_timeout", "id": task["id"], "topic": task["topic"]})
         except Exception as e:
             logger.exception(f"loop iter failed: {e}")
             event("loop_error", error=repr(e))
