@@ -217,7 +217,7 @@ async def _llm_generate(inputs: dict) -> list[dict]:
     resp = await llm.chat(
         [{"role": "system", "content": SYS_PROMPT},
          {"role": "user", "content": user_msg}],
-        temperature=0.2, max_tokens=3500, language_hint=user_lang)
+        temperature=0.2, max_tokens=4096, language_hint=user_lang)
     txt = llm.assistant_text(resp).strip()
     if txt.startswith("```"):
         txt = txt.strip("`")

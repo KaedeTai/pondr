@@ -159,7 +159,7 @@ async def _build_chat_answer(user_text: str) -> str:
             {"role": "system", "content": sys_msg},
             {"role": "user", "content": context_msg},
         ],
-        temperature=0.3, max_tokens=400, language_hint=user_lang,
+        temperature=0.3, max_tokens=4096, language_hint=user_lang,
     )
     return llm.assistant_text(reply_resp).strip()
 
@@ -285,7 +285,7 @@ async def _channel_dispatch():
                                  "pondr to gain a new technical capability, not for "
                                  "casual mentions.")},
                     {"role": "user", "content": txt},
-                ], temperature=0.0, max_tokens=300)
+                ], temperature=0.0, max_tokens=4096)
                 rt = llm.assistant_text(router_resp)
                 obj: dict = {}
                 try:

@@ -66,7 +66,7 @@ def _prepend_language_hint(messages: list[dict], lang: str | None) -> list[dict]
 
 
 async def chat(messages: list[dict], *, tools: list[dict] | None = None,
-               temperature: float = 0.4, max_tokens: int = 1024,
+               temperature: float = 0.4, max_tokens: int = 4096,
                attempts: int = 3, trace_id: str | None = None,
                language_hint: str | None = None) -> dict:
     """OpenAI chat.completions wrapper. Returns dict-like response. Never raises;

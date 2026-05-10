@@ -21,7 +21,7 @@ async def plan(topic: str, context: str = "") -> list[dict]:
     resp = await llm.chat(
         [{"role": "system", "content": SYSTEM},
          {"role": "user", "content": user_msg}],
-        temperature=0.3, max_tokens=900)
+        temperature=0.3, max_tokens=4096)
     txt = llm.assistant_text(resp)
     subs: list[dict] = []
     if txt:

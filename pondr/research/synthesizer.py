@@ -38,7 +38,7 @@ async def _score(finding: str, body: str) -> tuple[float, str]:
         {"role": "system", "content": SYS_SCORE},
         {"role": "user",
          "content": f"Finding:\n{finding}\n\nSource material:\n{body[:3000]}"},
-    ], temperature=0.0, max_tokens=200)
+    ], temperature=0.0, max_tokens=4096)
     txt = llm.assistant_text(resp)
     try:
         i, j = txt.find("{"), txt.rfind("}")
@@ -76,7 +76,7 @@ async def synthesize(parent_topic: str, results: list[dict]) -> dict:
     resp = await llm.chat([
         {"role": "system", "content": SYS_SYNTH},
         {"role": "user", "content": f"Topic: {parent_topic}\n\n{body}"},
-    ], temperature=0.3, max_tokens=700)
+    ], temperature=0.3, max_tokens=4096)
     txt = llm.assistant_text(resp) or "(no synthesis)"
     finding = txt[:500]
     conflicts: list[str] = []

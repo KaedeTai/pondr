@@ -137,7 +137,7 @@ async def _ask_llm_for_code(messages: list[dict], temperature: float = 0.4
     >1k tokens of reasoning_content before the actual code. With <2k the
     response gets truncated and content is empty.
     """
-    resp = await llm.chat(messages, temperature=temperature, max_tokens=4000)
+    resp = await llm.chat(messages, temperature=temperature, max_tokens=4096)
     txt = _extract_code_blob(resp)
     return txt, _strip_code_fences(txt)
 

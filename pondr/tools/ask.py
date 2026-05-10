@@ -86,7 +86,7 @@ async def _translate_if_needed(question: str,
             [{"role": "system",
               "content": "You are a precise translator. Output JSON only."},
              {"role": "user", "content": prompt}],
-            temperature=0.0, max_tokens=600, language_hint=lang)
+            temperature=0.0, max_tokens=4096, language_hint=lang)
         txt = llm.assistant_text(resp).strip()
         # Allow ```json fences
         if txt.startswith("```"):

@@ -93,7 +93,7 @@ async def reflect_on_topic(topic: str) -> dict:
         {"role": "system", "content": SYS_REFLECT},
         {"role": "user",
          "content": f"Topic: {topic}\n\nKB digest:\n{notes_blob}"},
-    ], temperature=0.3, max_tokens=900)
+    ], temperature=0.3, max_tokens=4096)
     txt = llm.assistant_text(resp)
     obj: dict = {"known": [], "researching": [], "unknown": []}
     try:

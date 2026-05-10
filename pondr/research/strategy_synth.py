@@ -112,7 +112,7 @@ async def _suggest_modification(parent_id: int) -> str | None:
     resp = await llm.chat(
         [{"role": "system", "content": SUGGEST_MOD_PROMPT},
          {"role": "user", "content": user}],
-        temperature=0.5, max_tokens=200)
+        temperature=0.5, max_tokens=4096)
     txt = (llm.assistant_text(resp) or "").strip()
     return txt[:400] or None
 

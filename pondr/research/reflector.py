@@ -16,7 +16,7 @@ async def reflect(topic: str, finding: str) -> list[str]:
         {"role": "system", "content": SYSTEM},
         {"role": "user",
          "content": f"Topic: {topic}\nFinding: {finding}"},
-    ], temperature=0.5, max_tokens=400)
+    ], temperature=0.5, max_tokens=4096)
     txt = llm.assistant_text(resp)
     try:
         i = txt.find("{")

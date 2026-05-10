@@ -59,7 +59,7 @@ async def execute(subtask: dict, parent_topic: str = "") -> dict:
 
     transcript: list[dict] = []
     for round_i in range(MAX_ROUNDS):
-        resp = await llm.chat(msgs, tools=ALL_SCHEMAS, temperature=0.4, max_tokens=900)
+        resp = await llm.chat(msgs, tools=ALL_SCHEMAS, temperature=0.4, max_tokens=4096)
         text = llm.assistant_text(resp)
         calls = llm.assistant_tool_calls(resp)
         if not calls:

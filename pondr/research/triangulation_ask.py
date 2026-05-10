@@ -187,7 +187,7 @@ async def _summarize_claim(finding: str) -> str:
         resp = await llm.chat(
             [{"role": "system", "content": _SUMMARY_SYS},
              {"role": "user", "content": finding[:1500]}],
-            temperature=0.0, max_tokens=60)
+            temperature=0.0, max_tokens=4096)
         q = (llm.assistant_text(resp) or "").strip().strip('"').strip("'")
         return (q or finding)[:200]
     except Exception:
@@ -240,7 +240,7 @@ async def triangulate_self(task: dict, ctx: dict | None = None) -> dict:
             [{"role": "system", "content": _ASSESS_SYS},
              {"role": "user",
               "content": f"Finding:\n{finding}\n\nNew sources:\n{body[:5000]}"}],
-            temperature=0.0, max_tokens=200)
+            temperature=0.0, max_tokens=4096)
         txt = llm.assistant_text(resp) or ""
         i, j = txt.find("{"), txt.rfind("}")
         if i >= 0 and j > i:
